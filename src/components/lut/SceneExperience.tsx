@@ -43,17 +43,40 @@ export default function SceneExperience() {
 
   currentRef.current = current;
 
-  /* ---------- preloader ---------- */
+  /* ---------- preloader: load 24 HD frames, progress tracks real loads ---------- */
   useEffect(() => {
-    let raf = 0;
-    const start = performance.now();
-    const tick = (t: number) => {
-      const p = Math.min(100, ((t - start) / 2000) * 100);
-      setProgress(p);
-      if (p < 100) raf = requestAnimationFrame(tick);
-      else finish();
+    let cancelled = false;
+    let loaded = 0;
+    let finished = false;
+    const total = HD_IMAGES.length;
+
+    const bump = (src: string) => {
+      if (cancelled) return;
+      loaded += 1;
+      setProgress((loaded / total) * 100);
+      setLoadedShot(src);
+      if (loaded >= total) finish();
     };
+
+    HD_IMAGES.forEach((src) => {
+      const img = new Image();
+      img.onload = () => bump(src);
+      img.onerror = () => bump(src);
+      img.src = src;
+    });
+
+    // hard ceiling so a slow network never traps the loader
+    const guard = window.setTimeout(() => {
+      if (!cancelled) {
+        setProgress(100);
+        finish();
+      }
+    }, 9000);
+
     const finish = () => {
+      if (finished || cancelled) return;
+      finished = true;
+      window.clearTimeout(guard);
       const v = transitionVideo.current;
       const done = () => {
         setWiping(false);
