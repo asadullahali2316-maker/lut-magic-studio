@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CDN, LOADER_CLIP, SCENES, TRANSITIONS } from "./data";
+import { HD_IMAGES, pick } from "./images";
 
 const TOTAL = SCENES.length;
 
@@ -33,6 +34,7 @@ export default function SceneExperience() {
   const [sound, setSound] = useState(false);
   const [sent, setSent] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const [loadedShot, setLoadedShot] = useState<string | null>(null);
 
   const currentRef = useRef(0);
   const animating = useRef(false);
@@ -43,17 +45,40 @@ export default function SceneExperience() {
 
   currentRef.current = current;
 
-  /* ---------- preloader ---------- */
+  /* ---------- preloader: load 24 HD frames, progress tracks real loads ---------- */
   useEffect(() => {
-    let raf = 0;
-    const start = performance.now();
-    const tick = (t: number) => {
-      const p = Math.min(100, ((t - start) / 2000) * 100);
-      setProgress(p);
-      if (p < 100) raf = requestAnimationFrame(tick);
-      else finish();
+    let cancelled = false;
+    let loaded = 0;
+    let finished = false;
+    const total = HD_IMAGES.length;
+
+    const bump = (src: string) => {
+      if (cancelled) return;
+      loaded += 1;
+      setProgress((loaded / total) * 100);
+      setLoadedShot(src);
+      if (loaded >= total) finish();
     };
+
+    HD_IMAGES.forEach((src) => {
+      const img = new Image();
+      img.onload = () => bump(src);
+      img.onerror = () => bump(src);
+      img.src = src;
+    });
+
+    // hard ceiling so a slow network never traps the loader
+    const guard = window.setTimeout(() => {
+      if (!cancelled) {
+        setProgress(100);
+        finish();
+      }
+    }, 9000);
+
     const finish = () => {
+      if (finished || cancelled) return;
+      finished = true;
+      window.clearTimeout(guard);
       const v = transitionVideo.current;
       const done = () => {
         setWiping(false);
@@ -67,8 +92,10 @@ export default function SceneExperience() {
       v.play().catch(done);
       window.setTimeout(done, 2400);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(guard);
+    };
   }, []);
 
   /* ---------- navigation ---------- */
@@ -207,11 +234,23 @@ export default function SceneExperience() {
               </span>
             ))}
           </div>
+          {loadedShot && (
+            <img className="lut-preload-shot" src={loadedShot} alt="" key={loadedShot} />
+          )}
           <div className="lut-bar">
             <div className="lut-bar-fill" style={{ width: `${progress}%` }} />
             <span className="lut-bar-label">
-              {String(Math.round(progress)).padStart(3, "0")} — Loading
+              {String(Math.round(progress)).padStart(3, "0")} — Loading{" "}
+              {Math.round((progress / 100) * HD_IMAGES.length)}/{HD_IMAGES.length} frames
             </span>
+          </div>
+          <div className="lut-preload-strip">
+            {HD_IMAGES.map((src, i) => (
+              <span
+                key={src}
+                className={`lut-tick${progress >= ((i + 1) / HD_IMAGES.length) * 100 ? " is-on" : ""}`}
+              />
+            ))}
           </div>
         </div>
       </div>
@@ -290,6 +329,20 @@ export default function SceneExperience() {
                   <p className="lut-eyebrow">{scene.eyebrow}</p>
                   <SplitTitle text={scene.title} active={active} />
                   <p className="lut-body">{scene.body}</p>
+                </div>
+              )}
+
+              {i === 8 && (
+                <div className="lut-overlay lut-gallery" aria-hidden={!active}>
+                  {[0, 1].map((row) => (
+                    <div className={`lut-marquee lut-marquee-${row}`} key={row}>
+                      {[...pick(8, row * 3), ...pick(8, row * 3)].map((src, k) => (
+                        <figure key={`${row}-${k}`} className="lut-tile">
+                          <img src={src} alt="" loading="lazy" />
+                        </figure>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               )}
 
