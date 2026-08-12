@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CDN, LOADER_CLIP, SCENES, TRANSITIONS } from "./data";
+import { HD_IMAGES, pick } from "./images";
 
 const TOTAL = SCENES.length;
 
