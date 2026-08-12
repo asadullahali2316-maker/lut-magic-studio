@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import SceneExperience from "@/components/lut/SceneExperience";
 
-const title = "LUT Studios — Every Frame Is a Painting";
-const description =
-  "A multidisciplinary creative production studio: VFX, CGI, animation, commercial production and sound design.";
+const title = "LUT Studios — Every Frame Is a Painting | Creative Production Studio";
+const description = "LUT Studios is a multidisciplinary creative production studio based in Yerevan, Armenia. We specialize in VFX, CGI, animation, commercial production, and sound design — merging high art with high tech.";
 
 export const Route = createFileRoute("/")({
   head: () => ({

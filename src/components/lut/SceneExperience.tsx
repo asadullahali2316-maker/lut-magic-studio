@@ -1,8 +1,51 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CDN, LOADER_CLIP, SCENES, TRANSITIONS } from "./data";
+import { CASE_ITEMS, CDN, LOADER_CLIP, LOADING_TEXTS, SCENES, TRANSITIONS } from "./data";
 import { HD_IMAGES, pick } from "./images";
 
 const TOTAL = SCENES.length;
+const CASES_INDEX = SCENES.findIndex((s) => s.label === "Cases");
+
+/**
+ * Swap a <video>'s source and play it, resolving `onDone` once it has
+ * actually finished (or a safe fallback timeout based on its real
+ * duration elapses). Using the real duration — instead of a fixed
+ * guess — is what stops long clips like "loading_to_homepage.mp4" or
+ * "Homepage_aboutstart.mp4" from being cut off / skipped.
+ */
+function playClip(video: HTMLVideoElement, src: string, onDone: () => void) {
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    onDone();
+  };
+
+  const armFallback = () => {
+    const d = video.duration;
+    const ms = Number.isFinite(d) && d > 0 ? d * 1000 + 260 : 3200;
+    window.setTimeout(finish, ms);
+  };
+
+  try {
+    video.pause();
+  } catch {
+    /* noop */
+  }
+
+  if (video.src !== src) {
+    video.src = src;
+    video.load();
+  }
+  video.currentTime = 0;
+
+  if (video.readyState >= 1) {
+    armFallback();
+  } else {
+    video.addEventListener("loadedmetadata", armFallback, { once: true });
+  }
+  video.addEventListener("ended", finish, { once: true });
+  video.play().catch(finish);
+}
 
 function SplitTitle({ text, active }: { text: string; active: boolean }) {
   return (
@@ -29,12 +72,14 @@ function SplitTitle({ text, active }: { text: string; active: boolean }) {
 export default function SceneExperience() {
   const [current, setCurrent] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [dir, setDir] = useState(1);
   const [progress, setProgress] = useState(0);
+  const [bgIndex, setBgIndex] = useState(0);
+  const [textIndex, setTextIndex] = useState(0);
   const [wiping, setWiping] = useState(false);
   const [sound, setSound] = useState(false);
   const [sent, setSent] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
-  const [loadedShot, setLoadedShot] = useState<string | null>(null);
 
   const currentRef = useRef(0);
   const animating = useRef(false);
@@ -42,59 +87,84 @@ export default function SceneExperience() {
   const transitionVideo = useRef<HTMLVideoElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const contactScroll = useRef<HTMLDivElement>(null);
+  const casesScroll = useRef<HTMLDivElement>(null);
+  const casesHead = useRef<HTMLDivElement>(null);
 
   currentRef.current = current;
 
-  /* ---------- preloader: load 24 HD frames, progress tracks real loads ---------- */
+  /* ---------- background preload: prime the browser cache for every
+     clip up front so scene transitions never have to skip / stall
+     waiting on the network. ---------- */
   useEffect(() => {
-    let cancelled = false;
-    let loaded = 0;
-    let finished = false;
-    const total = HD_IMAGES.length;
-
-    const bump = (src: string) => {
-      if (cancelled) return;
-      loaded += 1;
-      setProgress((loaded / total) * 100);
-      setLoadedShot(src);
-      if (loaded >= total) finish();
-    };
-
-    HD_IMAGES.forEach((src) => {
-      const img = new Image();
-      img.onload = () => bump(src);
-      img.onerror = () => bump(src);
-      img.src = src;
+    const urls = new Set<string>();
+    urls.add(LOADER_CLIP);
+    Object.values(TRANSITIONS).forEach((f) => urls.add(CDN + f));
+    SCENES.forEach((s) => {
+      if (s.kind === "video") urls.add(s.src);
     });
 
-    // hard ceiling so a slow network never traps the loader
-    const guard = window.setTimeout(() => {
-      if (!cancelled) {
-        setProgress(100);
+    const nodes: HTMLVideoElement[] = [];
+    urls.forEach((url) => {
+      const v = document.createElement("video");
+      v.preload = "auto";
+      v.muted = true;
+      v.playsInline = true;
+      v.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;";
+      v.src = url;
+      document.body.appendChild(v);
+      nodes.push(v);
+    });
+
+    return () => nodes.forEach((v) => v.remove());
+  }, []);
+
+  /* ---------- preloader: bar fill + cycling frames/text, then a
+     clean, un-skippable play of loading_to_homepage.mp4 ---------- */
+  useEffect(() => {
+    let cancelled = false;
+    let finished = false;
+
+    const start = Date.now();
+    const duration = 4000;
+    let tick = 0;
+
+    const cycle = window.setInterval(() => {
+      if (cancelled) return;
+      tick += 1;
+      setBgIndex(tick % HD_IMAGES.length);
+      setTextIndex(tick % LOADING_TEXTS.length);
+    }, 500);
+
+    const progressTimer = window.setInterval(() => {
+      if (cancelled) return;
+      const elapsed = Date.now() - start;
+      const pct = Math.min(100, (elapsed / duration) * 100);
+      setProgress(pct);
+      if (pct >= 100) {
+        window.clearInterval(progressTimer);
+        window.clearInterval(cycle);
+        setTextIndex(LOADING_TEXTS.length - 1);
         finish();
       }
-    }, 9000);
+    }, 30);
 
     const finish = () => {
       if (finished || cancelled) return;
       finished = true;
-      window.clearTimeout(guard);
       const v = transitionVideo.current;
       const done = () => {
         setWiping(false);
         setLoading(false);
       };
       if (!v) return done();
-      v.src = LOADER_CLIP;
       setWiping(true);
-      v.currentTime = 0;
-      v.addEventListener("ended", done, { once: true });
-      v.play().catch(done);
-      window.setTimeout(done, 2400);
+      playClip(v, LOADER_CLIP, done);
     };
+
     return () => {
       cancelled = true;
-      window.clearTimeout(guard);
+      window.clearInterval(cycle);
+      window.clearInterval(progressTimer);
     };
   }, []);
 
@@ -103,6 +173,7 @@ export default function SceneExperience() {
     const index = Math.max(0, Math.min(TOTAL - 1, rawIndex));
     const from = currentRef.current;
     if (index === from || animating.current) return;
+    setDir(index > from ? 1 : -1);
     animating.current = true;
 
     const clip = TRANSITIONS[`${from}-${index}`];
@@ -117,18 +188,8 @@ export default function SceneExperience() {
     };
 
     if (clip && v) {
-      v.src = CDN + clip;
       setWiping(true);
-      v.currentTime = 0;
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        settle();
-      };
-      v.addEventListener("ended", finish, { once: true });
-      v.play().catch(finish);
-      window.setTimeout(finish, 2400);
+      playClip(v, CDN + clip, settle);
     } else {
       setWiping(false);
       lockUntil.current = Date.now() + 900;
@@ -145,13 +206,18 @@ export default function SceneExperience() {
     if (loading) return;
 
     const onWheel = (e: WheelEvent) => {
-      const box = contactScroll.current;
-      if (box && currentRef.current === TOTAL - 1) {
-        const atTop = box.scrollTop <= 0;
-        const atBottom =
-          Math.ceil(box.scrollTop + box.clientHeight) >= box.scrollHeight;
-        if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) return;
+      const idx = currentRef.current;
+
+      if (idx === TOTAL - 1 || idx === CASES_INDEX) {
+        const box = idx === TOTAL - 1 ? contactScroll.current : casesScroll.current;
+        if (box) {
+          const atTop = box.scrollTop <= 0;
+          const atBottom =
+            Math.ceil(box.scrollTop + box.clientHeight) >= box.scrollHeight;
+          if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) return;
+        }
       }
+
       e.preventDefault();
       if (Date.now() < lockUntil.current || animating.current) return;
       if (Math.abs(e.deltaY) < 6) return;
@@ -200,6 +266,45 @@ export default function SceneExperience() {
     };
   }, [goTo, loading]);
 
+  /* ---------- cases: gentle auto-scroll through the grid ---------- */
+  useEffect(() => {
+    const active = current === CASES_INDEX && !loading;
+    const box = casesScroll.current;
+    if (!active || !box) return;
+
+    let raf = 0;
+    let paused = false;
+    let resumeTimer = 0;
+
+    const step = () => {
+      if (!paused && box) {
+        const max = box.scrollHeight - box.clientHeight;
+        if (box.scrollTop < max - 1) {
+          box.scrollTop += 0.6;
+        }
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+
+    const pauseForAWhile = () => {
+      paused = true;
+      window.clearTimeout(resumeTimer);
+      resumeTimer = window.setTimeout(() => {
+        paused = false;
+      }, 2600);
+    };
+    box.addEventListener("wheel", pauseForAWhile, { passive: true });
+    box.addEventListener("touchstart", pauseForAWhile, { passive: true });
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(resumeTimer);
+      box.removeEventListener("wheel", pauseForAWhile);
+      box.removeEventListener("touchstart", pauseForAWhile);
+    };
+  }, [current, loading]);
+
   /* ---------- sound ---------- */
   useEffect(() => {
     const a = audio.current;
@@ -217,14 +322,15 @@ export default function SceneExperience() {
     <div className="lut-root">
       {/* preloader */}
       <div className={`lut-preloader${loading ? "" : " is-gone"}`} aria-hidden={!loading}>
-        <video
-          className="lut-media"
-          src={CDN + "Homepage_loop.mp4"}
-          autoPlay
-          muted
-          loop
-          playsInline
-        />
+        {HD_IMAGES.slice(0, 8).map((src, i) => (
+          <img
+            key={src}
+            className={`lut-media lut-preloader-frame${i === bgIndex ? " is-active" : ""}`}
+            src={src}
+            alt=""
+            aria-hidden="true"
+          />
+        ))}
         <div className="lut-scrim" />
         <div className="lut-preloader-inner">
           <div className="lut-wordmark">
@@ -234,23 +340,11 @@ export default function SceneExperience() {
               </span>
             ))}
           </div>
-          {loadedShot && (
-            <img className="lut-preload-shot" src={loadedShot} alt="" key={loadedShot} />
-          )}
           <div className="lut-bar">
             <div className="lut-bar-fill" style={{ width: `${progress}%` }} />
-            <span className="lut-bar-label">
-              {String(Math.round(progress)).padStart(3, "0")} — Loading{" "}
-              {Math.round((progress / 100) * HD_IMAGES.length)}/{HD_IMAGES.length} frames
+            <span className="lut-bar-label" key={textIndex}>
+              {String(Math.round(progress)).padStart(3, "0")}% — {LOADING_TEXTS[textIndex]}
             </span>
-          </div>
-          <div className="lut-preload-strip">
-            {HD_IMAGES.map((src, i) => (
-              <span
-                key={src}
-                className={`lut-tick${progress >= ((i + 1) / HD_IMAGES.length) * 100 ? " is-on" : ""}`}
-              />
-            ))}
           </div>
         </div>
       </div>
@@ -271,11 +365,13 @@ export default function SceneExperience() {
           return (
             <section
               key={i}
-              className={`lut-scene${active ? " is-active" : ""}`}
+              className={`lut-scene${active ? " is-active" : ""}${
+                i === CASES_INDEX ? ` lut-cases-scene ${dir > 0 ? "enter-right" : "enter-left"}` : ""
+              }`}
               aria-hidden={!active}
             >
               <div className="lut-media-wrap" style={parallax(14)}>
-                {scene.kind === "video" ? (
+                {i === CASES_INDEX ? null : scene.kind === "video" ? (
                   <video
                     className="lut-media"
                     src={scene.src}
@@ -294,7 +390,7 @@ export default function SceneExperience() {
                   />
                 )}
               </div>
-              <div className="lut-vignette" />
+              {i !== CASES_INDEX && <div className="lut-vignette" />}
 
               {i === 0 && (
                 <div className="lut-overlay lut-home">
@@ -303,10 +399,9 @@ export default function SceneExperience() {
                   </h1>
                   <nav className="lut-home-nav">
                     {[
-                      [1, "Showreel"],
-                      [2, "About"],
-                      [8, "Cases"],
-                      [9, "Contact"],
+                      [1, "About"],
+                      [7, "Cases"],
+                      [8, "Contact"],
                     ].map(([idx, label]) => (
                       <button
                         key={label as string}
@@ -326,23 +421,54 @@ export default function SceneExperience() {
 
               {scene.title && (
                 <div className="lut-overlay lut-copy" style={parallax(-26)}>
-                  <p className="lut-eyebrow">{scene.eyebrow}</p>
                   <SplitTitle text={scene.title} active={active} />
                   <p className="lut-body">{scene.body}</p>
                 </div>
               )}
 
-              {i === 8 && (
-                <div className="lut-overlay lut-gallery" aria-hidden={!active}>
-                  {[0, 1].map((row) => (
-                    <div className={`lut-marquee lut-marquee-${row}`} key={row}>
-                      {[...pick(8, row * 3), ...pick(8, row * 3)].map((src, k) => (
-                        <figure key={`${row}-${k}`} className="lut-tile">
-                          <img src={src} alt="" loading="lazy" />
+              {i === CASES_INDEX && (
+                <div
+                  className="lut-overlay lut-gallery"
+                  aria-hidden={!active}
+                  ref={casesScroll}
+                  onScroll={(e) => {
+                    const el = casesHead.current;
+                    if (!el) return;
+                    const y = e.currentTarget.scrollTop;
+                    const p = Math.min(1, y / 260);
+                    el.style.transform = `translateY(${-p * 70}px)`;
+                    el.style.opacity = String(1 - p);
+                  }}
+                >
+                  <div className={`lut-cases-head${active ? " is-in" : ""}`} ref={casesHead}>
+                    <h2 className="lut-cases-title">CASES</h2>
+                    <p className="lut-cases-desc">
+                      Our portfolio features a blend of client collaborations and our own
+                      creative explorations. Each project, whether commercial or personal,
+                      reflects our passion for visual storytelling and experimentation.
+                    </p>
+                  </div>
+                  <div className="lut-cases-grid">
+                    {pick(12, 0).map((src, k) => {
+                      const item = CASE_ITEMS[k % CASE_ITEMS.length]!;
+                      return (
+                        <figure key={k} className="lut-case-card">
+                          <div className="lut-tv-screen">
+                            <img
+                              src={src}
+                              alt={item.title}
+                              loading="lazy"
+                              style={{ ["--i" as string]: k % 5 }}
+                            />
+                            <figcaption className="lut-case-info">
+                              <span className="lut-case-title">{item.title}</span>
+                              <span className="lut-case-tag">{item.tag}</span>
+                            </figcaption>
+                          </div>
                         </figure>
-                      ))}
-                    </div>
-                  ))}
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
