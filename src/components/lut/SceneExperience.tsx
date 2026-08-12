@@ -34,6 +34,7 @@ export default function SceneExperience() {
   const [sound, setSound] = useState(false);
   const [sent, setSent] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const [loadedShot, setLoadedShot] = useState<string | null>(null);
 
   const currentRef = useRef(0);
   const animating = useRef(false);
