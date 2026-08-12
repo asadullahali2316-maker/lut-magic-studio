@@ -133,11 +133,11 @@ export default function SceneExperience() {
 
     let touchY: number | null = null;
     const onStart = (e: TouchEvent) => {
-      touchY = e.touches[0].clientY;
+      touchY = e.touches[0]?.clientY ?? null;
     };
     const onEnd = (e: TouchEvent) => {
       if (touchY === null) return;
-      const dy = touchY - e.changedTouches[0].clientY;
+      const dy = touchY - (e.changedTouches[0]?.clientY ?? touchY);
       if (Math.abs(dy) > 60 && Date.now() >= lockUntil.current && !animating.current) {
         goTo(currentRef.current + (dy > 0 ? 1 : -1));
       }
