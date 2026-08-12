@@ -332,6 +332,20 @@ export default function SceneExperience() {
                 </div>
               )}
 
+              {i === 8 && (
+                <div className="lut-overlay lut-gallery" aria-hidden={!active}>
+                  {[0, 1].map((row) => (
+                    <div className={`lut-marquee lut-marquee-${row}`} key={row}>
+                      {[...pick(8, row * 3), ...pick(8, row * 3)].map((src, k) => (
+                        <figure key={`${row}-${k}`} className="lut-tile">
+                          <img src={src} alt="" loading="lazy" />
+                        </figure>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {i === TOTAL - 1 && (
                 <div className="lut-overlay lut-contact" ref={contactScroll}>
                   <div className="lut-contact-inner">
