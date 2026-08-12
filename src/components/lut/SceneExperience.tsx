@@ -90,8 +90,10 @@ export default function SceneExperience() {
       v.play().catch(done);
       window.setTimeout(done, 2400);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(guard);
+    };
   }, []);
 
   /* ---------- navigation ---------- */
