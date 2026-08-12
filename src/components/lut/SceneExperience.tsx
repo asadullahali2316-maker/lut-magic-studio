@@ -234,11 +234,23 @@ export default function SceneExperience() {
               </span>
             ))}
           </div>
+          {loadedShot && (
+            <img className="lut-preload-shot" src={loadedShot} alt="" key={loadedShot} />
+          )}
           <div className="lut-bar">
             <div className="lut-bar-fill" style={{ width: `${progress}%` }} />
             <span className="lut-bar-label">
-              {String(Math.round(progress)).padStart(3, "0")} — Loading
+              {String(Math.round(progress)).padStart(3, "0")} — Loading{" "}
+              {Math.round((progress / 100) * HD_IMAGES.length)}/{HD_IMAGES.length} frames
             </span>
+          </div>
+          <div className="lut-preload-strip">
+            {HD_IMAGES.map((src, i) => (
+              <span
+                key={src}
+                className={`lut-tick${progress >= ((i + 1) / HD_IMAGES.length) * 100 ? " is-on" : ""}`}
+              />
+            ))}
           </div>
         </div>
       </div>
