@@ -178,7 +178,7 @@ export default function SceneExperience() {
     const settle = () => {
       setCurrent(index);
       currentRef.current = index;
-      setWiping(false);
+        setWiping(false);
       lockUntil.current = Date.now() + 220;
       animating.current = false;
     };
@@ -188,12 +188,12 @@ export default function SceneExperience() {
       playClip(v, CDN + clip, settle);
     } else {
       setWiping(false);
-      lockUntil.current = Date.now() + 900;
+      lockUntil.current = Date.now() + 220;
       setCurrent(index);
       currentRef.current = index;
       window.setTimeout(() => {
         animating.current = false;
-      }, 900);
+      }, 220);
     }
   }, []);
 
@@ -327,16 +327,6 @@ export default function SceneExperience() {
         </div>
         <div className="lut-scrim" />
         <div className="lut-preloader-inner">
-          <div className="lut-wordmark">
-            {"lut".split("").map((c, i) => (
-              <span key={i} style={{ animationDelay: `${i * 120}ms` }}>
-                {c}
-              </span>
-            ))}
-            <span className="lut-mark-comma" style={{ animationDelay: "360ms" }}>
-              ,
-            </span>
-          </div>
           <div className="lut-bar">
             <div className="lut-bar-fill" style={{ width: `${progress}%` }} />
             <span className="lut-bar-label" key={textIndex}>
