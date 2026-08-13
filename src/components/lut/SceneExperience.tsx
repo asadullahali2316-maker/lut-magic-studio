@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CASE_ITEMS, CDN, LOADER_CLIP, LOADING_TEXTS, SCENES, TRANSITIONS } from "./data";
-import { HD_IMAGES, pick } from "./images";
+import { pick } from "./images";
 
 const TOTAL = SCENES.length;
 const CASES_INDEX = SCENES.findIndex((s) => s.label === "Cases");
@@ -74,7 +74,6 @@ export default function SceneExperience() {
   const [loading, setLoading] = useState(true);
   const [dir, setDir] = useState(1);
   const [progress, setProgress] = useState(0);
-  const [bgIndex, setBgIndex] = useState(0);
   const [textIndex, setTextIndex] = useState(0);
   const [wiping, setWiping] = useState(false);
   const [sound, setSound] = useState(false);
@@ -126,13 +125,10 @@ export default function SceneExperience() {
 
     const start = Date.now();
     const duration = 4000;
-    let tick = 0;
 
-    const cycle = window.setInterval(() => {
+    const textCycle = window.setInterval(() => {
       if (cancelled) return;
-      tick += 1;
-      setBgIndex(tick % HD_IMAGES.length);
-      setTextIndex(tick % LOADING_TEXTS.length);
+      setTextIndex((t) => (t + 1) % LOADING_TEXTS.length);
     }, 500);
 
     const progressTimer = window.setInterval(() => {
@@ -142,7 +138,7 @@ export default function SceneExperience() {
       setProgress(pct);
       if (pct >= 100) {
         window.clearInterval(progressTimer);
-        window.clearInterval(cycle);
+        window.clearInterval(textCycle);
         setTextIndex(LOADING_TEXTS.length - 1);
         finish();
       }
@@ -163,7 +159,7 @@ export default function SceneExperience() {
 
     return () => {
       cancelled = true;
-      window.clearInterval(cycle);
+      window.clearInterval(textCycle);
       window.clearInterval(progressTimer);
     };
   }, []);
@@ -322,23 +318,24 @@ export default function SceneExperience() {
     <div className="lut-root">
       {/* preloader */}
       <div className={`lut-preloader${loading ? "" : " is-gone"}`} aria-hidden={!loading}>
-        {HD_IMAGES.slice(0, 8).map((src, i) => (
-          <img
-            key={src}
-            className={`lut-media lut-preloader-frame${i === bgIndex ? " is-active" : ""}`}
-            src={src}
-            alt=""
-            aria-hidden="true"
+        <div className="lut-preloader-video">
+          <iframe
+            src="https://player.vimeo.com/video/1164666738?autoplay=1&muted=1&loop=1&background=1&controls=0"
+            allow="autoplay; fullscreen"
+            title="LUT Studios loading reel"
           />
-        ))}
+        </div>
         <div className="lut-scrim" />
         <div className="lut-preloader-inner">
           <div className="lut-wordmark">
-            {"LUT".split("").map((c, i) => (
+            {"lut".split("").map((c, i) => (
               <span key={i} style={{ animationDelay: `${i * 120}ms` }}>
                 {c}
               </span>
             ))}
+            <span className="lut-mark-comma" style={{ animationDelay: "360ms" }}>
+              ,
+            </span>
           </div>
           <div className="lut-bar">
             <div className="lut-bar-fill" style={{ width: `${progress}%` }} />
@@ -395,7 +392,7 @@ export default function SceneExperience() {
               {i === 0 && (
                 <div className="lut-overlay lut-home">
                   <h1 className="lut-logo">
-                    LUT<span>STUDIOS</span>
+                    lut,<span>STUDIOS</span>
                   </h1>
                   <nav className="lut-home-nav">
                     {[

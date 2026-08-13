@@ -157,6 +157,7 @@
 
 @theme inline {
   --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-logo: "Allura", cursive;
 }
 
 .lut-root {
@@ -190,11 +191,27 @@
   position: absolute;
   inset: 0;
   opacity: 0;
-  transform: scale(1.06);
-  filter: blur(6px);
-  transition: opacity 0.45s ease, transform 4s linear, filter 0.45s ease;
+  transform: scale(1.04);
+  transition: opacity 0.3s ease;
 }
-.lut-preloader-frame.is-active { opacity: 1; transform: scale(1); filter: blur(0); }
+.lut-preloader-frame.is-active { opacity: 1; transform: scale(1.04); }
+.lut-preloader-video {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.lut-preloader-video iframe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100vw;
+  height: 56.25vw; /* 16:9 */
+  min-height: 100vh;
+  min-width: 177.78vh; /* 16:9 */
+  transform: translate(-50%, -50%);
+  border: 0;
+}
 .lut-scrim {
   position: absolute;
   inset: 0;
@@ -208,16 +225,23 @@
 }
 .lut-wordmark {
   display: flex;
-  gap: 0.14em;
-  font-size: clamp(3rem, 12vw, 9rem);
-  font-weight: 200;
-  letter-spacing: 0.24em;
+  align-items: baseline;
+  justify-content: center;
+  font-family: var(--font-logo);
+  font-size: clamp(4.5rem, 16vw, 11rem);
+  font-weight: 400;
+  letter-spacing: 0;
   line-height: 1;
+  color: #fff;
 }
 .lut-wordmark span {
-  display: block;
+  display: inline-block;
   opacity: 0;
   animation: lut-rise 1.1s var(--lut-ease) forwards;
+}
+.lut-wordmark .lut-mark-comma {
+  font-family: var(--font-logo);
+  margin-left: 0.02em;
 }
 @keyframes lut-rise {
   from { opacity: 0; transform: translateY(0.5em) scale(1.15); filter: blur(14px); }
@@ -310,17 +334,20 @@
   text-align: center;
 }
 .lut-logo {
-  font-size: clamp(2rem, 7vw, 5rem);
-  font-weight: 200;
-  letter-spacing: 0.32em;
+  font-family: var(--font-logo);
+  font-size: clamp(3.4rem, 10vw, 7rem);
+  font-weight: 400;
+  letter-spacing: 0;
   line-height: 1;
   animation: lut-rise 1.4s var(--lut-ease) both;
 }
 .lut-logo span {
   display: block;
-  font-size: 0.24em;
+  font-family: var(--font-display);
+  font-size: 0.18em;
+  font-weight: 300;
   letter-spacing: 0.85em;
-  margin-top: 1.1em;
+  margin-top: 1.3em;
   opacity: 0.7;
 }
 .lut-home-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(1rem, 4vw, 3rem); }
